@@ -338,19 +338,14 @@ if __name__ == '__main__':
       max_scores = torch.zeros(scores.size(0)).cuda()
       for j in xrange(1, len(pascal_classes)):
           cls_scores = scores[:,j]
-          _, order = torch.sort(cls_scores, 0, True)
-          if args.class_agnostic:
-            cls_boxes = pred_boxes
-          else:
-            cls_boxes = pred_boxes[:, j * 4:(j + 1) * 4]
-          
+          cls_boxes = pred_boxes[:, j * 4:(j + 1) * 4]
           cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
-          cls_dets = cls_dets[order]
           keep = nms(cls_dets, cfg.TEST.NMS).view(-1).long()
-          _cls_scores = cls_scores[order]
-          _cls_scores.index_copy_(0, keep, _cls_scores[keep] * 2)
-          _cls_scores -= cls_scores[order]
-          max_scores.index_copy_(0, order, torch.max(max_scores[order], _cls_scores))
+          for k in range(keep.size(0)):
+              idx = keep[k]
+              if cls_scores[idx] > max_scores[idx]:
+                  max_scores[idx] = cls_scores[idx]
+          
       cls_dets = torch.cat((pred_boxes, max_scores.unsqueeze(1)), 1)
       candidates = (max_scores>thresh).nonzero()
       if candidates.dim()==0 or candidates.size(0) < MIN_BOXES:
@@ -386,5 +381,7 @@ if __name__ == '__main__':
           cv2.imwrite(result_path, im2show)
   bar.update(num_images)
 
-  featset = {'features': features[:pos_boxes[-1]], 'image_bb': image_bb[:pos_boxes[-1]], 'spatials': spatials[:pos_boxes[-1]], 'pos_boxes': pos_boxes, 'indices': indices}        
+  features = features[:pos_boxes[-1]]
+  features = torch.zeros(features.size()).copy_(features)
+  featset = {'features': features, 'image_bb': image_bb[:pos_boxes[-1]], 'spatials': spatials[:pos_boxes[-1]], 'pos_boxes': pos_boxes, 'indices': indices}        
   torch.save(featset, 'featset.pth')
